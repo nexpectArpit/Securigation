@@ -33,17 +33,19 @@ class GroqReasoningEngine:
         active_key = user_groq_key or self.api_key
         if active_key:
             try:
-                # Truncate compressed text to avoid exceeding Groq context window
-                truncated_text = compressed_text[:12000] if len(compressed_text) > 12000 else compressed_text
+                import time as _time
+                # Truncate compressed text — stay within Groq free tier 12K TPM
+                truncated_text = compressed_text[:3000] if len(compressed_text) > 3000 else compressed_text
                 system_prompt = (
-                    "You are Securigation AI, an expert cybersecurity incident response analyst. "
-                    "You are investigating a security incident using compressed log evidence. "
-                    "RULES: "
-                    "1) Your 'answer' MUST be a detailed 3-5 paragraph analysis citing specific IPs, timestamps, usernames, and commands from the logs. NEVER answer with just one word or one sentence. "
-                    "2) 'evidence_used' must list 3-5 specific log entries or patterns you found. "
-                    "3) 'summary' must have: attack_started (timestamp), initial_access (method), compromised_user (username), persistence (technique), outcome (what happened). "
-                    "4) 'graph' must have nodes (id, label, type where type is IP/USER/HOST/FILE/PROCESS) and edges (source, target, relationship). Include 4-8 nodes. "
-                    "5) 'timeline' must have 3-5 events with timestamp, title, description, severity (LOW/MEDIUM/HIGH/CRITICAL). "
+                    "You are Securigation AI, a cybersecurity incident response analyst. "
+                    "Analyze the compressed security logs and answer the question. "
+                    "CRITICAL RULES: "
+                    "1) 'answer': 2-3 paragraph analysis citing IPs, timestamps, usernames. Never one word. "
+                    "2) 'evidence_used': list of 3-5 short descriptions of evidence patterns found. Do NOT paste raw log lines. "
+                    "3) 'summary': {attack_started, initial_access, compromised_user, persistence, outcome} — each value is a short string. "
+                    "4) 'graph': {nodes: [{id: string, label: string, type: string}], edges: [{source: string, target: string, relationship: string}]} — 4-6 nodes, type must be IP/USER/HOST/FILE/PROCESS. "
+                    "5) 'timeline': [{timestamp, title, description, severity}] — 3-4 events, severity must be LOW/MEDIUM/HIGH/CRITICAL. "
+                    "IMPORTANT: Do NOT copy raw log lines into your response. Summarize findings in your own words. "
                     "Return valid JSON with keys: answer, evidence_used, summary, graph, timeline."
                 )
                 headers = {
@@ -60,7 +62,17 @@ class GroqReasoningEngine:
                     "temperature": 0.1,
                     "max_tokens": 4096
                 }
-                res = httpx.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30.0)
+
+                # Retry loop for rate limiting (429)
+                for attempt in range(3):
+                    res = httpx.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30.0)
+                    if res.status_code == 429:
+                        wait_time = 10 * (attempt + 1)
+                        print(f"[GroqReasoningEngine] Rate limited (429). Waiting {wait_time}s before retry {attempt + 1}/3...")
+                        _time.sleep(wait_time)
+                        continue
+                    break
+
                 if res.status_code == 200:
                     res_json = res.json()
                     content = res_json["choices"][0]["message"]["content"]
@@ -84,15 +96,20 @@ class GroqReasoningEngine:
                     except Exception:
                         summary_obj = self._extract_fallback_summary(compressed_events)
                     
-                    # 2. Parse Graph safely
+                    # 2. Parse Graph safely (convert node IDs to strings)
                     try:
                         graph_data = parsed.get("graph", {}) if isinstance(parsed, dict) else {}
                         nodes_data = graph_data.get("nodes", [])
                         for node in nodes_data:
+                            node["id"] = str(node.get("id", ""))
                             if "type" in node and isinstance(node["type"], str):
                                 node["type"] = node["type"].upper()
+                        edges_data = graph_data.get("edges", [])
+                        for edge in edges_data:
+                            edge["source"] = str(edge.get("source", ""))
+                            edge["target"] = str(edge.get("target", ""))
                         graph_nodes = [GraphNode(**n) for n in nodes_data]
-                        graph_edges = [GraphEdge(**e) for e in graph_data.get("edges", [])]
+                        graph_edges = [GraphEdge(**e) for e in edges_data]
                         graph_obj = GraphData(nodes=graph_nodes, edges=graph_edges) if graph_nodes else self._extract_fallback_graph(compressed_events)
                     except Exception:
                         graph_obj = self._extract_fallback_graph(compressed_events)
@@ -111,25 +128,15 @@ class GroqReasoningEngine:
                     
                     return parsed.get("answer", "Analysis complete."), parsed.get("evidence_used", []), summary_obj, graph_obj, timeline_objs
                 else:
-                    error_msg = f"Groq API returned status code {res.status_code}: {res.text}"
+                    error_msg = f"Groq API returned status code {res.status_code}: {res.text[:200]}"
                     print(f"[GroqReasoningEngine] {error_msg}")
-                    return (
-                        f"⚠️ **Grounded AI Reasoning Failed**: {error_msg}\n\nPlease check your Groq API key in the Settings page.",
-                        [],
-                        self._extract_fallback_summary(compressed_events),
-                        self._extract_fallback_graph(compressed_events),
-                        self._extract_fallback_timeline(compressed_events)
-                    )
+                    # Fall back to deterministic reasoning instead of showing error to user
+                    return self._generate_deterministic_reasoning(question, compressed_events)
             except Exception as e:
                 error_msg = f"Connection to Groq failed: {str(e)}"
                 print(f"[GroqReasoningEngine] {error_msg}")
-                return (
-                    f"⚠️ **Grounded AI Reasoning Failed**: {error_msg}\n\nPlease verify your internet connection or check if your Groq API key is valid.",
-                    [],
-                    self._extract_fallback_summary(compressed_events),
-                    self._extract_fallback_graph(compressed_events),
-                    self._extract_fallback_timeline(compressed_events)
-                )
+                # Fall back to deterministic reasoning instead of showing error to user
+                return self._generate_deterministic_reasoning(question, compressed_events)
 
         # Fallback Deterministic Reasoning Engine Grounded in Compressed Events (only when no key is configured)
         return self._generate_deterministic_reasoning(question, compressed_events)
