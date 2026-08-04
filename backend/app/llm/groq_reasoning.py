@@ -54,7 +54,7 @@ class GroqReasoningEngine:
                     ],
                     "temperature": 0.1
                 }
-                res = httpx.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=8.0)
+                res = httpx.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30.0)
                 if res.status_code == 200:
                     res_json = res.json()
                     content = res_json["choices"][0]["message"]["content"]
@@ -65,33 +65,67 @@ class GroqReasoningEngine:
                         else:
                             parsed = {}
                     
-                    # Normalize values to prevent Pydantic validation exceptions from LLM casing output
-                    summary_obj = InvestigationSummaryData(**parsed.get("summary", {})) if (isinstance(parsed, dict) and "summary" in parsed) else self._extract_fallback_summary(compressed_events)
+                    # 1. Parse Summary safely
+                    try:
+                        summary_dict = parsed.get("summary", {}) if isinstance(parsed, dict) else {}
+                        summary_obj = InvestigationSummaryData(
+                            attack_started=str(summary_dict.get("attack_started") or (compressed_events[0].timestamp if compressed_events else "2026-07-31T00:00:00Z")),
+                            initial_access=str(summary_dict.get("initial_access") or "Brute Force / Web Exploit"),
+                            compromised_user=str(summary_dict.get("compromised_user") or "admin"),
+                            persistence=str(summary_dict.get("persistence") or "SSH Key / Shell"),
+                            outcome=str(summary_dict.get("outcome") or "Unauthorized System Access")
+                        )
+                    except Exception:
+                        summary_obj = self._extract_fallback_summary(compressed_events)
                     
-                    graph_data = parsed.get("graph", {})
-                    nodes_data = graph_data.get("nodes", [])
-                    for node in nodes_data:
-                        if "type" in node and isinstance(node["type"], str):
-                            node["type"] = node["type"].upper()
-                    graph_nodes = [GraphNode(**n) for n in nodes_data]
-                    graph_edges = [GraphEdge(**e) for e in graph_data.get("edges", [])]
-                    graph_obj = GraphData(nodes=graph_nodes, edges=graph_edges) if graph_nodes else self._extract_fallback_graph(compressed_events)
+                    # 2. Parse Graph safely
+                    try:
+                        graph_data = parsed.get("graph", {}) if isinstance(parsed, dict) else {}
+                        nodes_data = graph_data.get("nodes", [])
+                        for node in nodes_data:
+                            if "type" in node and isinstance(node["type"], str):
+                                node["type"] = node["type"].upper()
+                        graph_nodes = [GraphNode(**n) for n in nodes_data]
+                        graph_edges = [GraphEdge(**e) for e in graph_data.get("edges", [])]
+                        graph_obj = GraphData(nodes=graph_nodes, edges=graph_edges) if graph_nodes else self._extract_fallback_graph(compressed_events)
+                    except Exception:
+                        graph_obj = self._extract_fallback_graph(compressed_events)
                     
-                    timeline_data = parsed.get("timeline", [])
-                    for item in timeline_data:
-                        if "severity" in item and isinstance(item["severity"], str):
-                            item["severity"] = item["severity"].upper()
-                        # Fallback for missing severity
-                        elif "severity" not in item:
-                            item["severity"] = "HIGH"
-                            
-                    timeline_objs = [TimelineEvent(**t) for t in timeline_data] if timeline_data else self._extract_fallback_timeline(compressed_events)
+                    # 3. Parse Timeline safely
+                    try:
+                        timeline_data = parsed.get("timeline", []) if isinstance(parsed, dict) else []
+                        for item in timeline_data:
+                            if "severity" in item and isinstance(item["severity"], str):
+                                item["severity"] = item["severity"].upper()
+                            elif "severity" not in item:
+                                item["severity"] = "HIGH"
+                        timeline_objs = [TimelineEvent(**t) for t in timeline_data] if timeline_data else self._extract_fallback_timeline(compressed_events)
+                    except Exception:
+                        timeline_objs = self._extract_fallback_timeline(compressed_events)
                     
                     return parsed.get("answer", "Analysis complete."), parsed.get("evidence_used", []), summary_obj, graph_obj, timeline_objs
+                else:
+                    error_msg = f"Groq API returned status code {res.status_code}: {res.text}"
+                    print(f"[GroqReasoningEngine] {error_msg}")
+                    return (
+                        f"⚠️ **Grounded AI Reasoning Failed**: {error_msg}\n\nPlease check your Groq API key in the Settings page.",
+                        [],
+                        self._extract_fallback_summary(compressed_events),
+                        self._extract_fallback_graph(compressed_events),
+                        self._extract_fallback_timeline(compressed_events)
+                    )
             except Exception as e:
-                print(f"[GroqReasoningEngine] Groq API call failed or unconfigured, proceeding with deterministic reasoning engine: {e}")
+                error_msg = f"Connection to Groq failed: {str(e)}"
+                print(f"[GroqReasoningEngine] {error_msg}")
+                return (
+                    f"⚠️ **Grounded AI Reasoning Failed**: {error_msg}\n\nPlease verify your internet connection or check if your Groq API key is valid.",
+                    [],
+                    self._extract_fallback_summary(compressed_events),
+                    self._extract_fallback_graph(compressed_events),
+                    self._extract_fallback_timeline(compressed_events)
+                )
 
-        # Fallback Deterministic Reasoning Engine Grounded in Compressed Events
+        # Fallback Deterministic Reasoning Engine Grounded in Compressed Events (only when no key is configured)
         return self._generate_deterministic_reasoning(question, compressed_events)
 
     def _generate_deterministic_reasoning(

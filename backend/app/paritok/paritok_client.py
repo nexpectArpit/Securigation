@@ -56,7 +56,7 @@ class ParitokClient:
                     "kind": "log_investigation"
                 }
                 print(f"[ParitokClient] Sending compression request to {self.hosted_api_url} with API key {active_key[:8]}...")
-                response = httpx.post(self.hosted_api_url, headers=headers, json=body, timeout=10.0)
+                response = httpx.post(self.hosted_api_url, headers=headers, json=body, timeout=5.0)
 
                 if response.status_code == 200:
                     data = response.json()
@@ -64,9 +64,11 @@ class ParitokClient:
                     is_connected = True
                     print(f"[ParitokClient] Paritok API SUCCESS 200 OK: Compressed payload received ({len(compressed_text_from_api)} chars)")
                 else:
-                    print(f"[ParitokClient] Paritok API returned HTTP {response.status_code}: {response.text}")
+                    raise Exception(f"Paritok API returned HTTP {response.status_code}: {response.text}")
+            except httpx.TimeoutException:
+                raise Exception("Paritok API request timed out. Please verify your API key is valid or check if the Paritok service is experiencing high load.")
             except Exception as e:
-                print(f"[ParitokClient] Hosted API call to www.paritok.com failed: {e}")
+                raise Exception(f"Paritok API call failed: {str(e)}")
 
         # Local structured event sampling: keep all HIGH/CRITICAL, sample 10% of rest
         high_sev = [e for e in raw_events if (e.severity.value if hasattr(e.severity, 'value') else e.severity) in ["HIGH", "CRITICAL"]]

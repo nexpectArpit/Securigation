@@ -391,11 +391,14 @@ export const ParitokTelemetryDashboard: React.FC<ParitokTelemetryDashboardProps>
             {[
               { label: "Log events", before: w.events, after: p.events, unit: "" },
               { label: "Tokens", before: w.tokens, after: p.tokens, unit: "" },
-              { label: "LLM cost", before: w.cost_usd * 100, after: p.cost_usd * 100, unit: "¢", decimals: 3 },
+              { label: "LLM cost", before: w.cost_usd, after: p.cost_usd, unit: "$", decimals: 5 },
               { label: "Latency", before: w.latency_sec, after: p.latency_sec, unit: "s", decimals: 2 },
             ].map(row => {
               const pct = (row.after / Math.max(row.before, 0.0001)) * 100;
-              const fmt = (v: number) => row.decimals ? `${v.toFixed(row.decimals)}${row.unit}` : `${v.toLocaleString()}${row.unit}`;
+              const fmt = (v: number) => {
+                const valStr = row.decimals ? v.toFixed(row.decimals) : v.toLocaleString();
+                return row.unit === "$" ? `$${valStr}` : `${valStr}${row.unit}`;
+              };
               return (
                 <div key={row.label}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "rgba(170,170,190,0.7)", marginBottom: "4px" }}>

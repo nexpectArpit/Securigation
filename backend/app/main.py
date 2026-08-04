@@ -26,6 +26,34 @@ app.add_middleware(
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+import asyncio
+import httpx
+import logging
+
+logger = logging.getLogger("uvicorn")
+
+async def keep_alive():
+    import os
+    url = os.getenv("RENDER_EXTERNAL_URL")
+    if not url:
+        logger.info("RENDER_EXTERNAL_URL not set. Skipping self-ping keep-alive task.")
+        return
+    
+    logger.info(f"Starting self-ping keep-alive task targeting: {url}")
+    await asyncio.sleep(60)
+    async with httpx.AsyncClient() as client:
+        while True:
+            try:
+                response = await client.get(url, timeout=10.0)
+                logger.info(f"Self-ping successful: {response.status_code}")
+            except Exception as e:
+                logger.warning(f"Self-ping failed: {e}")
+            await asyncio.sleep(600)
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(keep_alive())
+
 @app.get("/")
 async def root():
     return {

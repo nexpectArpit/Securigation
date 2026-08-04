@@ -4,6 +4,8 @@
 
 Built with [Paritok](https://github.com/Paritok-official/paritok-4b-v1) Hackathon Edition
 
+**Live Demo Backend Link:** [https://securigation.onrender.com/](https://securigation.onrender.com/)
+
 An AI powered security investigation platform that transforms massive security log files into evidence backed incident answers. Powered by Paritok Context Optimization for high token efficiency, reduced cost, and low latency.
 
 ---

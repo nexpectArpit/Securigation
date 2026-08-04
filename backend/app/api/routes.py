@@ -99,35 +99,25 @@ async def upload_log_files(inv_id: str, files: List[UploadFile] = File(...)):
 
     inv_info = INVESTIGATIONS_STORE[inv_id]
 
+    import zipfile
+    import io
+
     for upload in files:
         print(f"[Upload] START: {upload.filename} — waiting for multipart body to finish buffering...")
         t0 = time.time()
-
-        # FastAPI/uvicorn buffers multipart upload before we get here.
-        # For large files the delay you see is uvicorn writing the body to a temp spooled file.
-        # Once we get here, we stream it ourselves in 256KB chunks.
-        print(f"[Upload] Body buffered. Starting chunk read & sample...")
 
         head_lines: list = []
         reservoir: list = []
         tail_buf: list = []
         total_lines = 0
         total_bytes = 0
-        leftover = b""
 
-        print(f"[Upload] Reading chunks from {upload.filename}...")
-
-        while True:
-            chunk = await upload.read(CHUNK_SIZE)
-            if not chunk:
-                break
-
-            total_bytes += len(chunk)
-            chunk = leftover + chunk
-            parts = chunk.split(b"\n")
-            leftover = parts[-1]
-
-            for raw_line in parts[:-1]:
+        # Helper to process a stream of lines
+        def process_line_stream(line_iterator):
+            nonlocal total_lines
+            for raw_line in line_iterator:
+                if not raw_line:
+                    continue
                 try:
                     line = raw_line.decode("utf-8", errors="replace").rstrip()
                 except Exception:
@@ -136,11 +126,9 @@ async def upload_log_files(inv_id: str, files: List[UploadFile] = File(...)):
                     continue
 
                 total_lines += 1
-
                 if total_lines <= MAX_HEAD:
                     head_lines.append(line)
                 else:
-                    # Reservoir sample for middle
                     if len(reservoir) < MAX_MID:
                         reservoir.append(line)
                     else:
@@ -148,29 +136,60 @@ async def upload_log_files(inv_id: str, files: List[UploadFile] = File(...)):
                         if j < MAX_MID:
                             reservoir[j] = line
 
-                    # Circular tail buffer
                     if len(tail_buf) < MAX_TAIL:
                         tail_buf.append(line)
                     else:
                         tail_buf[total_lines % MAX_TAIL] = line
 
-            # Progress every 50MB
-            if total_bytes % (50 * 1024 * 1024) < CHUNK_SIZE:
-                elapsed = time.time() - t0
-                print(f"[Upload] {total_bytes/1024/1024:.0f}MB read, {total_lines:,} lines, {elapsed:.1f}s elapsed")
-
-        # Handle leftover at EOF
-        if leftover:
+        # Check if the uploaded file is a zip archive
+        is_zip = upload.filename.endswith(".zip")
+        
+        if is_zip:
+            print(f"[Upload] Detected ZIP archive: {upload.filename}. Extracting on-the-fly...")
             try:
-                line = leftover.decode("utf-8", errors="replace").rstrip()
-                if line:
-                    total_lines += 1
-                    tail_buf[total_lines % MAX_TAIL] = line
-            except Exception:
-                pass
+                # Open zip archive using the spooled temporary file
+                with zipfile.ZipFile(upload.file) as z:
+                    for member in z.infolist():
+                        # Skip directories and metadata folders
+                        if member.is_dir() or member.filename.startswith("__MACOSX") or ".DS_Store" in member.filename:
+                            continue
+                        
+                        print(f"[Upload] Extracting & streaming lines from zip member: {member.filename} ({member.file_size/1024/1024:.1f} MB)...")
+                        total_bytes += member.file_size
+                        
+                        with z.open(member) as f:
+                            # Read and split member file stream into lines without loading fully into memory
+                            leftover = b""
+                            while True:
+                                chunk = f.read(CHUNK_SIZE)
+                                if not chunk:
+                                    break
+                                chunk = leftover + chunk
+                                parts = chunk.split(b"\n")
+                                leftover = parts[-1]
+                                process_line_stream(parts[:-1])
+                            if leftover:
+                                process_line_stream([leftover])
+            except Exception as e:
+                print(f"[Upload] Error processing ZIP archive: {e}")
+        else:
+            # Regular text file stream
+            print(f"[Upload] Reading chunk stream from raw file: {upload.filename}...")
+            leftover = b""
+            while True:
+                chunk = await upload.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                total_bytes += len(chunk)
+                chunk = leftover + chunk
+                parts = chunk.split(b"\n")
+                leftover = parts[-1]
+                process_line_stream(parts[:-1])
+            if leftover:
+                process_line_stream([leftover])
 
         elapsed = time.time() - t0
-        print(f"[Upload] DONE reading: {total_bytes/1024/1024:.1f}MB, {total_lines:,} lines in {elapsed:.1f}s")
+        print(f"[Upload] DONE processing: {total_bytes/1024/1024:.1f}MB uncompressed, {total_lines:,} lines in {elapsed:.1f}s")
 
         # Assemble sampled lines
         seen: set = set()
@@ -224,7 +243,10 @@ async def execute_investigation_query(inv_id: str, request: QueryRequest, x_pari
     evidence_pack = assemble_evidence_pack(inv_id, request.question, retrieved_events)
 
     # Step 3: Paritok Context Optimization
-    compressed_events, paritok_metrics, compressed_text = paritok_client.optimize_evidence_pack(evidence_pack, x_paritok_key)
+    try:
+        compressed_events, paritok_metrics, compressed_text = paritok_client.optimize_evidence_pack(evidence_pack, x_paritok_key)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Step 4: AI Reasoning (Groq / Grounded Engine)
     answer, evidence_used, summary, graph, timeline = groq_reasoning.analyze_compressed_context(

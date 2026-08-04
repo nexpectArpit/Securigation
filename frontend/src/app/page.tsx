@@ -25,16 +25,16 @@ interface ChatMessage {
 export default function Home() {
   const [activeView, setActiveView] = useState<"OVERVIEW" | "WORKSPACE">("OVERVIEW");
   const [inputMode, setInputMode] = useState<"DEMO" | "UPLOAD">("DEMO");
-  
+
   const [samples, setSamples] = useState<InvestigationInfo[]>([]);
   const [selectedSampleId, setSelectedSampleId] = useState<string>("demo-apt29-compromise");
   const [currentInvestigation, setCurrentInvestigation] = useState<InvestigationInfo | null>(null);
-  
+
   // Store the active custom investigation if already created in the backend
   const [customInvestigationId, setCustomInvestigationId] = useState<string | null>(null);
   const [customInvestigation, setCustomInvestigation] = useState<InvestigationInfo | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
-  
+
   // Workspace visibility controls
   const [isWorkspaceVisible, setIsWorkspaceVisible] = useState<boolean>(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -43,7 +43,7 @@ export default function Home() {
   const [response, setResponse] = useState<QueryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Track historical Paritok metrics for trend analysis
   const [historicalMetrics, setHistoricalMetrics] = useState<ParitokMetrics[]>([]);
 
@@ -86,7 +86,7 @@ export default function Home() {
     setError(null);
     setChatMessages([]);
     setHistoricalMetrics([]); // Reset metrics history for new investigation
-    
+
     // Smooth transition entry to workspace
     setIsWorkspaceVisible(true);
   };
@@ -122,18 +122,35 @@ export default function Home() {
     if (uploadedFiles.length === 0) return;
     setIsLoading(true);
     setError(null);
-    setUploadStatus("Creating investigation workspace...");
-    
+
+    const totalBytes = uploadedFiles.reduce((s, f) => s + f.size, 0);
+    const totalMB = (totalBytes / 1024 / 1024).toFixed(1);
+
+    // Estimate upload time at ~1.2 MB/s + 8s backend processing buffer
+    let remainingSeconds = Math.max(8, Math.round(totalBytes / (1.2 * 1024 * 1024)) + 8);
+
+    setUploadStatus(`Uploading & processing ${totalMB}MB... ~${remainingSeconds}s remaining`);
+
+    let timerInterval = setInterval(() => {
+      remainingSeconds--;
+      if (remainingSeconds > 0) {
+        setUploadStatus(`Uploading & processing ${totalMB}MB... ~${remainingSeconds}s remaining`);
+      } else {
+        setUploadStatus(`Finalizing parsing and indexing logs... please wait`);
+      }
+    }, 1000);
+
     try {
       const inv = await createInvestigation("Custom Upload", `Investigating ${uploadedFiles.length} files`);
       setCustomInvestigationId(inv.id);
 
-      const totalMB = (uploadedFiles.reduce((s, f) => s + f.size, 0) / 1024 / 1024).toFixed(1);
-      setUploadStatus(`Uploading & sampling ${totalMB}MB, extracting key events...`);
-      
       const updatedInv = await uploadLogFiles(inv.id, uploadedFiles);
+
+      if (timerInterval) clearInterval(timerInterval);
+
       setCustomInvestigation(updatedInv);
       setCurrentInvestigation(updatedInv);
+      setUploadedFiles([]); // Clear pending files queue to prevent duplicate uploads
 
       setUploadStatus("Indexing events into search engine...");
       setIsWorkspaceVisible(true);
@@ -141,6 +158,7 @@ export default function Home() {
       setResponse(null);
       setUploadStatus("");
     } catch (err: any) {
+      if (timerInterval) clearInterval(timerInterval);
       setError(err.message || "Failed to initialize custom log investigation.");
       setUploadStatus("");
     } finally {
@@ -152,6 +170,16 @@ export default function Home() {
   const handleSendMessage = async (text: string) => {
     if (!text.trim() || isLoading) return;
 
+    // Check if API keys are configured in local storage first
+    if (typeof window !== "undefined") {
+      const pKey = localStorage.getItem("paritok_api_key");
+      const gKey = localStorage.getItem("groq_api_key");
+      if (!pKey || !gKey) {
+        setError("Please add your Paritok and Groq API keys in the Settings page (top right lock icon) first before submitting a query.");
+        return;
+      }
+    }
+
     // Append user message to thread
     const userMsg: ChatMessage = {
       id: Math.random().toString(),
@@ -160,7 +188,7 @@ export default function Home() {
       timestamp: new Date()
     };
     setChatMessages((prev) => [...prev, userMsg]);
-    
+
     setIsLoading(true);
     setError(null);
     setPipelineStep("RETRIEVAL");
@@ -173,10 +201,10 @@ export default function Home() {
 
       // Execute query
       const result = await executeQuery(activeId, text);
-      
+
       // Update result state and response card
       setResponse(result);
-      
+
       // Add new metrics to historical tracking
       if (result.paritok_metrics) {
         setHistoricalMetrics(prev => [...prev, result.paritok_metrics]);
@@ -215,7 +243,7 @@ export default function Home() {
         </div>
       ) : (
         <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "0 24px", position: "relative", zIndex: 10 }}>
-          
+
           {/* Back to Overview button */}
           <div style={{ marginBottom: "20px", display: "flex", justifyContent: "flex-start" }}>
             <button
@@ -541,7 +569,7 @@ export default function Home() {
               opacity: 0,
               transform: "translateY(20px)"
             }}>
-              
+
               {/* Left Pane - Chat Console */}
               <div>
                 <ChatConsole
@@ -554,7 +582,7 @@ export default function Home() {
 
               {/* Right Pane - Telemetry & Analysis */}
               <div style={{ overflowY: "auto", maxHeight: "680px", paddingRight: "6px" }}>
-                
+
                 {/* Pipeline Stepper */}
                 {pipelineStep !== "IDLE" && (
                   <PipelineStepper
@@ -566,7 +594,7 @@ export default function Home() {
                 )}
 
                 {/* New Dynamic Paritok Telemetry Dashboard */}
-                <ParitokTelemetryDashboard 
+                <ParitokTelemetryDashboard
                   currentMetrics={response?.paritok_metrics}
                   historicalMetrics={historicalMetrics}
                 />

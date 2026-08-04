@@ -311,7 +311,7 @@ export const LandingOverview: React.FC<LandingOverviewProps> = ({
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "24px", position: "relative" }} className="font-mono">
           {/* Before */}
-          <div style={{ padding: "20px", borderLeft: "4px solid #ff3366", background: "rgba(255, 51, 102, 0.05)", backdropFilter: "blur(10px)", borderRadius: "10px", border: "1px solid rgba(255, 51, 102, 0.2)", borderLeft: "4px solid #ff3366" }}>
+          <div style={{ padding: "20px", background: "rgba(255, 51, 102, 0.05)", backdropFilter: "blur(10px)", borderRadius: "10px", border: "1px solid rgba(255, 51, 102, 0.2)", borderLeft: "4px solid #ff3366" }}>
             <div style={{ color: "#ff3366", fontSize: "0.85rem", fontWeight: 800, marginBottom: "8px" }}>
               ❌ UNCOMPRESSED RAW LOGS ({selectedFormat === "SSH" ? "15,000" : selectedFormat === "APACHE" ? "10,000" : "20,000"} LINES)
             </div>
@@ -352,7 +352,7 @@ export const LandingOverview: React.FC<LandingOverviewProps> = ({
           </div>
 
           {/* After */}
-          <div style={{ padding: "20px", borderLeft: "4px solid #00f5c8", background: hasCompressed ? "rgba(0, 245, 200, 0.07)" : "rgba(100, 180, 255, 0.04)", backdropFilter: "blur(10px)", borderRadius: "10px", border: hasCompressed ? "1px solid rgba(0, 245, 200, 0.3)" : "1px solid rgba(255,255,255,0.08)", borderLeft: "4px solid #00f5c8", transition: "all 0.5s ease" }}>
+          <div style={{ padding: "20px", background: hasCompressed ? "rgba(0, 245, 200, 0.07)" : "rgba(100, 180, 255, 0.04)", backdropFilter: "blur(10px)", borderRadius: "10px", border: hasCompressed ? "1px solid rgba(0, 245, 200, 0.3)" : "1px solid rgba(255,255,255,0.08)", borderLeft: "4px solid #00f5c8", transition: "all 0.5s ease" }}>
             <div style={{ color: "#00f5c8", fontSize: "0.85rem", fontWeight: 800, marginBottom: "8px" }}>
               ⚡ PARITOK OPTIMIZED EVIDENCE (215 LINES) | {currentSandbox.compMetrics.reduction} REDUCTION
             </div>
@@ -482,7 +482,7 @@ export const LandingOverview: React.FC<LandingOverviewProps> = ({
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "28px" }}>
           {/* Traditional */}
-          <div style={{ padding: "28px", borderLeft: "4px solid #ff3366", background: "rgba(255, 51, 102, 0.06)", backdropFilter: "blur(10px)", borderRadius: "10px", border: "1px solid rgba(255, 51, 102, 0.25)", borderLeft: "4px solid #ff3366" }}>
+          <div style={{ padding: "28px", background: "rgba(255, 51, 102, 0.06)", backdropFilter: "blur(10px)", borderRadius: "10px", border: "1px solid rgba(255, 51, 102, 0.25)", borderLeft: "4px solid #ff3366" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#ff3366", fontWeight: 700, marginBottom: "16px" }}>
               <XCircle size={20} />
               <span>TRADITIONAL UNCOMPRESSED SIEM AI</span>
@@ -496,7 +496,7 @@ export const LandingOverview: React.FC<LandingOverviewProps> = ({
           </div>
 
           {/* Securigation */}
-          <div style={{ padding: "28px", borderLeft: "4px solid #00f5c8", background: "rgba(0, 245, 200, 0.06)", backdropFilter: "blur(10px)", borderRadius: "10px", border: "1px solid rgba(0, 245, 200, 0.22)", borderLeft: "4px solid #00f5c8" }}>
+          <div style={{ padding: "28px", background: "rgba(0, 245, 200, 0.06)", backdropFilter: "blur(10px)", borderRadius: "10px", border: "1px solid rgba(0, 245, 200, 0.22)", borderLeft: "4px solid #00f5c8" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#00f5c8", fontWeight: 700, marginBottom: "16px" }}>
               <CheckCircle2 size={20} />
               <span>SECURIGATION + PARITOK ENGINE</span>
