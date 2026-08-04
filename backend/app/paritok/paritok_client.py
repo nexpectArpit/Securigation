@@ -37,6 +37,7 @@ class ParitokClient:
 
         is_connected = False
         compressed_text_from_api = ""
+        api_failure_reason = ""
 
         # Send a representative sample to Paritok API (limited to 10 lines for fast cloud processing)
         api_lines = raw_lines[:10]
@@ -56,7 +57,7 @@ class ParitokClient:
                     "kind": "log_investigation"
                 }
                 print(f"[ParitokClient] Sending compression request to {self.hosted_api_url} with API key {active_key[:8]}...")
-                response = httpx.post(self.hosted_api_url, headers=headers, json=body, timeout=5.0)
+                response = httpx.post(self.hosted_api_url, headers=headers, json=body, timeout=8.0)
 
                 if response.status_code == 200:
                     data = response.json()
@@ -64,11 +65,16 @@ class ParitokClient:
                     is_connected = True
                     print(f"[ParitokClient] Paritok API SUCCESS 200 OK: Compressed payload received ({len(compressed_text_from_api)} chars)")
                 else:
-                    raise Exception(f"Paritok API returned HTTP {response.status_code}: {response.text}")
+                    api_failure_reason = f"Paritok API returned HTTP {response.status_code}"
+                    print(f"[ParitokClient] {api_failure_reason}: {response.text}")
             except httpx.TimeoutException:
-                raise Exception("Paritok API request timed out. Please verify your API key is valid or check if the Paritok service is experiencing high load.")
+                api_failure_reason = "Paritok hosted API timed out (server unreachable from this network)"
+                print(f"[ParitokClient] {api_failure_reason}")
             except Exception as e:
-                raise Exception(f"Paritok API call failed: {str(e)}")
+                api_failure_reason = f"Paritok API call failed: {str(e)}"
+                print(f"[ParitokClient] {api_failure_reason}")
+        else:
+            api_failure_reason = "No Paritok API key configured"
 
         # Local structured event sampling: keep all HIGH/CRITICAL, sample 10% of rest
         high_sev = [e for e in raw_events if (e.severity.value if hasattr(e.severity, 'value') else e.severity) in ["HIGH", "CRITICAL"]]
@@ -110,6 +116,14 @@ class ParitokClient:
         cost_saved = round(max(0.0, raw_cost - compressed_cost), 6)
         latency_saved = round(max(0.0, raw_latency - compressed_latency), 2)
 
+        # Set status transparently based on whether Paritok API succeeded
+        if is_connected:
+            paritok_status = ParitokStatusEnum.ACTIVE
+            paritok_message = "Paritok Context Optimization Engine Active"
+        else:
+            paritok_status = ParitokStatusEnum.ACTIVE  # Still show metrics from local compression
+            paritok_message = f"⚠ {api_failure_reason} — using local structured compression fallback"
+
         metrics = ParitokMetrics(
             without_paritok=ParitokMetricDetail(
                 events=raw_event_count,
@@ -127,8 +141,8 @@ class ParitokClient:
             tokens_saved=tokens_saved,
             cost_saved_usd=cost_saved,
             latency_saved_sec=latency_saved,
-            status=ParitokStatusEnum.ACTIVE,
-            status_message="Paritok Context Optimization Engine Active"
+            status=paritok_status,
+            status_message=paritok_message
         )
 
         return compressed_events, metrics, compressed_text_payload

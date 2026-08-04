@@ -243,10 +243,7 @@ async def execute_investigation_query(inv_id: str, request: QueryRequest, x_pari
     evidence_pack = assemble_evidence_pack(inv_id, request.question, retrieved_events)
 
     # Step 3: Paritok Context Optimization
-    try:
-        compressed_events, paritok_metrics, compressed_text = paritok_client.optimize_evidence_pack(evidence_pack, x_paritok_key)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    compressed_events, paritok_metrics, compressed_text = paritok_client.optimize_evidence_pack(evidence_pack, x_paritok_key)
 
     # Step 4: AI Reasoning (Groq / Grounded Engine)
     answer, evidence_used, summary, graph, timeline = groq_reasoning.analyze_compressed_context(
