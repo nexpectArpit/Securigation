@@ -1,0 +1,357 @@
+{
+  "query_id": "347b3b21-d0d3-4523-af03-49a83be29f1f",
+  "question": "Show all malicious SSH login spikes and root escalation commands",
+  "answer": "Multiple malicious SSH login spikes from 192.168.1.105 and root escalation commands by admin",
+  "evidence_used": [
+    "[2026-07-31T00:46:23.000Z] apt29_auth_security.log HIGH 192.168.1.105 root : 2026-07-31T00:04:13Z linux-sec-node sshd[4103]: Failed password for invalid user root from 192.168.1.105 port 49153 ssh2 [seq_id=9983]",
+    "[2026-07-31T00:47:22.000Z] apt29_auth_security.log HIGH 192.168.1.105 root : 2026-07-31T00:04:12Z linux-sec-node sshd[4102]: Failed password for invalid user root from 192.168.1.105 port 49152 ssh2 [seq_id=2842]",
+    "[2026-07-31T00:45:25.000Z] apt29_auth_security.log HIGH  admin : 2026-07-31T00:07:10Z linux-sec-node sudo: admin : TTY=pts/0 ; PWD=/home/admin ; USER=root ; COMMAND=/bin/bash [seq_id=6325]"
+  ],
+  "summary": {
+    "attack_started": "2026-07-31T00:04:12Z",
+    "initial_access": "SSH login attempt from 192.168.1.105",
+    "compromised_user": "admin",
+    "persistence": "Root escalation using sudo",
+    "outcome": "Potential privilege escalation and unauthorized access"
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "1",
+        "label": "192.168.1.105",
+        "type": "IP ADDRESS"
+      },
+      {
+        "id": "2",
+        "label": "admin",
+        "type": "USER"
+      },
+      {
+        "id": "3",
+        "label": "linux-sec-node",
+        "type": "HOST"
+      },
+      {
+        "id": "4",
+        "label": "root",
+        "type": "USER"
+      }
+    ],
+    "edges": [
+      {
+        "source": "1",
+        "target": "3",
+        "relationship": "SSH login attempt"
+      },
+      {
+        "source": "2",
+        "target": "4",
+        "relationship": "Root escalation using sudo"
+      }
+    ]
+  },
+  "timeline": [
+    {
+      "id": "4acd1312-6123-4730-ac04-820e76fc9e7c",
+      "timestamp": "2026-07-31T00:04:12Z",
+      "title": "SSH login attempt",
+      "description": "Failed password for invalid user root from 192.168.1.105 port 49152 ssh2",
+      "severity": "HIGH",
+      "associated_event_ids": []
+    },
+    {
+      "id": "d8a497e4-ee65-4573-9f75-b59fb4e081c1",
+      "timestamp": "2026-07-31T00:04:13Z",
+      "title": "SSH login attempt",
+      "description": "Failed password for invalid user root from 192.168.1.105 port 49153 ssh2",
+      "severity": "HIGH",
+      "associated_event_ids": []
+    },
+    {
+      "id": "48736039-db45-4c74-b2df-929b44b0d2d5",
+      "timestamp": "2026-07-31T00:07:10Z",
+      "title": "Root escalation",
+      "description": "admin used sudo to escalate to root",
+      "severity": "HIGH",
+      "associated_event_ids": []
+    }
+  ],
+  "paritok_metrics": {
+    "without_paritok": {
+      "events": 1500,
+      "tokens": 76804,
+      "cost_usd": 0.00384,
+      "latency_sec": 8.18
+    },
+    "with_paritok": {
+      "events": 15,
+      "tokens": 767,
+      "cost_usd": 3.8e-05,
+      "latency_sec": 0.58
+    },
+    "compression_ratio": 99.0,
+    "tokens_saved": 76037,
+    "cost_saved_usd": 0.003802,
+    "latency_saved_sec": 7.6,
+    "status": "ACTIVE",
+    "status_message": "Paritok Context Optimization Engine Active"
+  },
+  "supporting_evidence": [
+    {
+      "event_id": "a7ab69f2-8bde-4f2d-ad48-09abb555e98b",
+      "investigation_id": "demo-apt29-compromise",
+      "timestamp": "2026-07-31T00:45:25.000Z",
+      "log_source": "apt29_auth_security.log",
+      "event_type": "SYSLOG_ACTIVITY",
+      "severity": "HIGH",
+      "source_ip": null,
+      "destination_ip": "10.0.0.1",
+      "source_port": null,
+      "destination_port": null,
+      "user_account": "admin",
+      "hostname": "linux-sec-node",
+      "summary": "2026-07-31T00:07:10Z linux-sec-node sudo: admin : TTY=pts/0 ; PWD=/home/admin ; USER=root ; COMMAND=/bin/bash [seq_id=6325]",
+      "raw_log": "2026-07-31T00:07:10Z linux-sec-node sudo: admin : TTY=pts/0 ; PWD=/home/admin ; USER=root ; COMMAND=/bin/bash [seq_id=6325]",
+      "metadata": {}
+    },
+    {
+      "event_id": "73f80e2a-0ca0-499f-823e-c34cebfe927e",
+      "investigation_id": "demo-apt29-compromise",
+      "timestamp": "2026-07-31T00:46:23.000Z",
+      "log_source": "apt29_auth_security.log",
+      "event_type": "AUTHENTICATION_FAILURE",
+      "severity": "HIGH",
+      "source_ip": "192.168.1.105",
+      "destination_ip": "10.0.0.1",
+      "source_port": null,
+      "destination_port": null,
+      "user_account": "root",
+      "hostname": "linux-sec-node",
+      "summary": "2026-07-31T00:04:13Z linux-sec-node sshd[4103]: Failed password for invalid user root from 192.168.1.105 port 49153 ssh2 [seq_id=9983]",
+      "raw_log": "2026-07-31T00:04:13Z linux-sec-node sshd[4103]: Failed password for invalid user root from 192.168.1.105 port 49153 ssh2 [seq_id=9983]",
+      "metadata": {}
+    },
+    {
+      "event_id": "a70b802a-7dc3-484b-98a3-352462382f3a",
+      "investigation_id": "demo-apt29-compromise",
+      "timestamp": "2026-07-31T00:47:22.000Z",
+      "log_source": "apt29_auth_security.log",
+      "event_type": "AUTHENTICATION_FAILURE",
+      "severity": "HIGH",
+      "source_ip": "192.168.1.105",
+      "destination_ip": "10.0.0.1",
+      "source_port": null,
+      "destination_port": null,
+      "user_account": "root",
+      "hostname": "linux-sec-node",
+      "summary": "2026-07-31T00:04:12Z linux-sec-node sshd[4102]: Failed password for invalid user root from 192.168.1.105 port 49152 ssh2 [seq_id=2842]",
+      "raw_log": "2026-07-31T00:04:12Z linux-sec-node sshd[4102]: Failed password for invalid user root from 192.168.1.105 port 49152 ssh2 [seq_id=2842]",
+      "metadata": {}
+    },
+    {
+      "event_id": "9c20b480-2e32-4f5e-a30e-4dfea3fd052e",
+      "investigation_id": "demo-apt29-compromise",
+      "timestamp": "2026-07-31T00:48:20.000Z",
+      "log_source": "apt29_auth_security.log",
+      "event_type": "SYSLOG_ACTIVITY",
+      "severity": "HIGH",
+      "source_ip": null,
+      "destination_ip": "10.0.0.1",
+      "source_port": null,
+      "destination_port": null,
+      "user_account": "admin",
+      "hostname": "linux-sec-node",
+      "summary": "2026-07-31T00:07:10Z linux-sec-node sudo: admin : TTY=pts/0 ; PWD=/home/admin ; USER=root ; COMMAND=/bin/bash [seq_id=6500]",
+      "raw_log": "2026-07-31T00:07:10Z linux-sec-node sudo: admin : TTY=pts/0 ; PWD=/home/admin ; USER=root ; COMMAND=/bin/bash [seq_id=6500]",
+      "metadata": {}
+    },
+    {
+      "event_id": "f223d208-b5e9-40b9-8dfa-ee85f4a98c7b",
+      "investigation_id": "demo-apt29-compromise",
+      "timestamp": "2026-07-31T00:49:18.000Z",
+      "log_source": "apt29_auth_security.log",
+      "event_type": "AUTHENTICATION_FAILURE",
+      "severity": "HIGH",
+      "source_ip": "192.168.1.105",
+      "destination_ip": "10.0.0.1",
+      "source_port": null,
+      "destination_port": null,
+      "user_account": "root",
+      "hostname": "linux-sec-node",
+      "summary": "2026-07-31T00:04:13Z linux-sec-node sshd[4103]: Failed password for invalid user root from 192.168.1.105 port 49153 ssh2 [seq_id=10158]",
+      "raw_log": "2026-07-31T00:04:13Z linux-sec-node sshd[4103]: Failed password for invalid user root from 192.168.1.105 port 49153 ssh2 [seq_id=10158]",
+      "metadata": {}
+    },
+    {
+      "event_id": "1164eb95-5885-4c69-b38d-6706e0cb6524",
+      "investigation_id": "demo-apt29-compromise",
+      "timestamp": "2026-07-31T00:50:17.000Z",
+      "log_source": "apt29_auth_security.log",
+      "event_type": "AUTHENTICATION_FAILURE",
+      "severity": "HIGH",
+      "source_ip": "192.168.1.105",
+      "destination_ip": "10.0.0.1",
+      "source_port": null,
+      "destination_port": null,
+      "user_account": "root",
+      "hostname": "linux-sec-node",
+      "summary": "2026-07-31T00:04:12Z linux-sec-node sshd[4102]: Failed password for invalid user root from 192.168.1.105 port 49152 ssh2 [seq_id=3017]",
+      "raw_log": "2026-07-31T00:04:12Z linux-sec-node sshd[4102]: Failed password for invalid user root from 192.168.1.105 port 49152 ssh2 [seq_id=3017]",
+      "metadata": {}
+    },
+    {
+      "event_id": "8b94667b-741f-4398-8487-cf845459f6f8",
+      "investigation_id": "demo-apt29-compromise",
+      "timestamp": "2026-07-31T00:51:15.000Z",
+      "log_source": "apt29_auth_security.log",
+      "event_type": "SYSLOG_ACTIVITY",
+      "severity": "HIGH",
+      "source_ip": null,
+      "destination_ip": "10.0.0.1",
+      "source_port": null,
+      "destination_port": null,
+      "user_account": "admin",
+      "hostname": "linux-sec-node",
+      "summary": "2026-07-31T00:07:10Z linux-sec-node sudo: admin : TTY=pts/0 ; PWD=/home/admin ; USER=root ; COMMAND=/bin/bash [seq_id=6675]",
+      "raw_log": "2026-07-31T00:07:10Z linux-sec-node sudo: admin : TTY=pts/0 ; PWD=/home/admin ; USER=root ; COMMAND=/bin/bash [seq_id=6675]",
+      "metadata": {}
+    },
+    {
+      "event_id": "1f54ca63-d636-4939-84e1-06afbd698bcc",
+      "investigation_id": "demo-apt29-compromise",
+      "timestamp": "2026-07-31T00:52:13.000Z",
+      "log_source": "apt29_auth_security.log",
+      "event_type": "AUTHENTICATION_FAILURE",
+      "severity": "HIGH",
+      "source_ip": "192.168.1.105",
+      "destination_ip": "10.0.0.1",
+      "source_port": null,
+      "destination_port": null,
+      "user_account": "root",
+      "hostname": "linux-sec-node",
+      "summary": "2026-07-31T00:04:13Z linux-sec-node sshd[4103]: Failed password for invalid user root from 192.168.1.105 port 49153 ssh2 [seq_id=10333]",
+      "raw_log": "2026-07-31T00:04:13Z linux-sec-node sshd[4103]: Failed password for invalid user root from 192.168.1.105 port 49153 ssh2 [seq_id=10333]",
+      "metadata": {}
+    },
+    {
+      "event_id": "3a0cd676-c79f-4acd-aeaa-73ff5f7ced08",
+      "investigation_id": "demo-apt29-compromise",
+      "timestamp": "2026-07-31T00:53:12.000Z",
+      "log_source": "apt29_auth_security.log",
+      "event_type": "AUTHENTICATION_FAILURE",
+      "severity": "HIGH",
+      "source_ip": "192.168.1.105",
+      "destination_ip": "10.0.0.1",
+      "source_port": null,
+      "destination_port": null,
+      "user_account": "root",
+      "hostname": "linux-sec-node",
+      "summary": "2026-07-31T00:04:12Z linux-sec-node sshd[4102]: Failed password for invalid user root from 192.168.1.105 port 49152 ssh2 [seq_id=3192]",
+      "raw_log": "2026-07-31T00:04:12Z linux-sec-node sshd[4102]: Failed password for invalid user root from 192.168.1.105 port 49152 ssh2 [seq_id=3192]",
+      "metadata": {}
+    },
+    {
+      "event_id": "42dad755-4c19-412d-94b7-32bce12923e1",
+      "investigation_id": "demo-apt29-compromise",
+      "timestamp": "2026-07-31T00:54:10.000Z",
+      "log_source": "apt29_auth_security.log",
+      "event_type": "SYSLOG_ACTIVITY",
+      "severity": "HIGH",
+      "source_ip": null,
+      "destination_ip": "10.0.0.1",
+      "source_port": null,
+      "destination_port": null,
+      "user_account": "admin",
+      "hostname": "linux-sec-node",
+      "summary": "2026-07-31T00:07:10Z linux-sec-node sudo: admin : TTY=pts/0 ; PWD=/home/admin ; USER=root ; COMMAND=/bin/bash [seq_id=6850]",
+      "raw_log": "2026-07-31T00:07:10Z linux-sec-node sudo: admin : TTY=pts/0 ; PWD=/home/admin ; USER=root ; COMMAND=/bin/bash [seq_id=6850]",
+      "metadata": {}
+    },
+    {
+      "event_id": "b0378f0e-0875-4315-a55a-beaa79a16f7b",
+      "investigation_id": "demo-apt29-compromise",
+      "timestamp": "2026-07-31T00:55:08.000Z",
+      "log_source": "apt29_auth_security.log",
+      "event_type": "AUTHENTICATION_FAILURE",
+      "severity": "HIGH",
+      "source_ip": "192.168.1.105",
+      "destination_ip": "10.0.0.1",
+      "source_port": null,
+      "destination_port": null,
+      "user_account": "root",
+      "hostname": "linux-sec-node",
+      "summary": "2026-07-31T00:04:13Z linux-sec-node sshd[4103]: Failed password for invalid user root from 192.168.1.105 port 49153 ssh2 [seq_id=10508]",
+      "raw_log": "2026-07-31T00:04:13Z linux-sec-node sshd[4103]: Failed password for invalid user root from 192.168.1.105 port 49153 ssh2 [seq_id=10508]",
+      "metadata": {}
+    },
+    {
+      "event_id": "78614e43-50cc-4d96-a7b6-1c020bf3835c",
+      "investigation_id": "demo-apt29-compromise",
+      "timestamp": "2026-07-31T00:56:07.000Z",
+      "log_source": "apt29_auth_security.log",
+      "event_type": "AUTHENTICATION_FAILURE",
+      "severity": "HIGH",
+      "source_ip": "192.168.1.105",
+      "destination_ip": "10.0.0.1",
+      "source_port": null,
+      "destination_port": null,
+      "user_account": "root",
+      "hostname": "linux-sec-node",
+      "summary": "2026-07-31T00:04:12Z linux-sec-node sshd[4102]: Failed password for invalid user root from 192.168.1.105 port 49152 ssh2 [seq_id=3367]",
+      "raw_log": "2026-07-31T00:04:12Z linux-sec-node sshd[4102]: Failed password for invalid user root from 192.168.1.105 port 49152 ssh2 [seq_id=3367]",
+      "metadata": {}
+    },
+    {
+      "event_id": "3f8ece0d-3926-4b96-b598-81df45921d0b",
+      "investigation_id": "demo-apt29-compromise",
+      "timestamp": "2026-07-31T00:57:05.000Z",
+      "log_source": "apt29_auth_security.log",
+      "event_type": "SYSLOG_ACTIVITY",
+      "severity": "HIGH",
+      "source_ip": null,
+      "destination_ip": "10.0.0.1",
+      "source_port": null,
+      "destination_port": null,
+      "user_account": "admin",
+      "hostname": "linux-sec-node",
+      "summary": "2026-07-31T00:07:10Z linux-sec-node sudo: admin : TTY=pts/0 ; PWD=/home/admin ; USER=root ; COMMAND=/bin/bash [seq_id=7025]",
+      "raw_log": "2026-07-31T00:07:10Z linux-sec-node sudo: admin : TTY=pts/0 ; PWD=/home/admin ; USER=root ; COMMAND=/bin/bash [seq_id=7025]",
+      "metadata": {}
+    },
+    {
+      "event_id": "399c4c17-1aa1-452c-8bcf-0adceac3310f",
+      "investigation_id": "demo-apt29-compromise",
+      "timestamp": "2026-07-31T00:58:03.000Z",
+      "log_source": "apt29_auth_security.log",
+      "event_type": "AUTHENTICATION_FAILURE",
+      "severity": "HIGH",
+      "source_ip": "192.168.1.105",
+      "destination_ip": "10.0.0.1",
+      "source_port": null,
+      "destination_port": null,
+      "user_account": "root",
+      "hostname": "linux-sec-node",
+      "summary": "2026-07-31T00:04:13Z linux-sec-node sshd[4103]: Failed password for invalid user root from 192.168.1.105 port 49153 ssh2 [seq_id=10683]",
+      "raw_log": "2026-07-31T00:04:13Z linux-sec-node sshd[4103]: Failed password for invalid user root from 192.168.1.105 port 49153 ssh2 [seq_id=10683]",
+      "metadata": {}
+    },
+    {
+      "event_id": "79edc8ff-5e47-4557-afd0-377049b6672c",
+      "investigation_id": "demo-apt29-compromise",
+      "timestamp": "2026-07-31T00:59:02.000Z",
+      "log_source": "apt29_auth_security.log",
+      "event_type": "AUTHENTICATION_FAILURE",
+      "severity": "HIGH",
+      "source_ip": "192.168.1.105",
+      "destination_ip": "10.0.0.1",
+      "source_port": null,
+      "destination_port": null,
+      "user_account": "root",
+      "hostname": "linux-sec-node",
+      "summary": "2026-07-31T00:04:12Z linux-sec-node sshd[4102]: Failed password for invalid user root from 192.168.1.105 port 49152 ssh2 [seq_id=3542]",
+      "raw_log": "2026-07-31T00:04:12Z linux-sec-node sshd[4102]: Failed password for invalid user root from 192.168.1.105 port 49152 ssh2 [seq_id=3542]",
+      "metadata": {}
+    }
+  ],
+  "created_at": "2026-08-04T20:51:15.799097"
+}

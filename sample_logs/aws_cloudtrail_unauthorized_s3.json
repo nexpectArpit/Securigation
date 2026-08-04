@@ -1,0 +1,40 @@
+{
+  "Records": [
+    {
+      "eventTime": "2026-07-31T04:00:15Z",
+      "eventSource": "signin.amazonaws.com",
+      "eventName": "ConsoleLogin",
+      "awsRegion": "us-east-1",
+      "sourceIPAddress": "198.51.100.99",
+      "userAgent": "Mozilla/5.0",
+      "userIdentity": {
+        "type": "IAMUser",
+        "userName": "dev_temp_user",
+        "accessKeyId": "AKIAIOSFODNN7EXAMPLE"
+      },
+      "responseElements": { "ConsoleLogin": "Success" }
+    },
+    {
+      "eventTime": "2026-07-31T04:02:10Z",
+      "eventSource": "iam.amazonaws.com",
+      "eventName": "AttachUserPolicy",
+      "awsRegion": "us-east-1",
+      "sourceIPAddress": "198.51.100.99",
+      "requestParameters": {
+        "userName": "dev_temp_user",
+        "policyArn": "arn:aws:iam::aws:policy/AdministratorAccess"
+      }
+    },
+    {
+      "eventTime": "2026-07-31T04:05:00Z",
+      "eventSource": "s3.amazonaws.com",
+      "eventName": "GetObject",
+      "awsRegion": "us-east-1",
+      "sourceIPAddress": "198.51.100.99",
+      "requestParameters": {
+        "bucketName": "corp-confidential-vault",
+        "key": "customer_passwords_backup.csv"
+      }
+    }
+  ]
+}
