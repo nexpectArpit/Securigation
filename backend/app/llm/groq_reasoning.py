@@ -33,13 +33,15 @@ class GroqReasoningEngine:
         active_key = user_groq_key or self.api_key
         if active_key:
             try:
+                # Truncate compressed text to avoid exceeding Groq context window
+                truncated_text = compressed_text[:12000] if len(compressed_text) > 12000 else compressed_text
                 system_prompt = (
-                    "You are an expert AI Security Analyst investigating a cyber incident. "
-                    "Analyze the provided compressed security logs and answer the user's question. "
-                    "You MUST ground your response strictly in the provided logs. Return valid JSON containing: "
-                    "answer (str), evidence_used (list of str), summary (object with attack_started, initial_access, compromised_user, persistence, outcome), "
-                    "graph (object with nodes [{id, label, type}] and edges [{source, target, relationship}]), "
-                    "timeline (list of objects with timestamp, title, description, severity)."
+                    "You are an expert AI Security Analyst. Analyze the compressed security logs and answer the question. "
+                    "Ground your response strictly in the provided logs. Return CONCISE valid JSON with: "
+                    "answer (str), evidence_used (list of str, max 5), "
+                    "summary (obj: attack_started, initial_access, compromised_user, persistence, outcome), "
+                    "graph (obj: nodes [{id, label, type}] max 8 nodes, edges [{source, target, relationship}]), "
+                    "timeline (list [{timestamp, title, description, severity}] max 5 events). Keep all string values SHORT."
                 )
                 headers = {
                     "Authorization": f"Bearer {active_key}",
@@ -50,9 +52,10 @@ class GroqReasoningEngine:
                     "response_format": {"type": "json_object"},
                     "messages": [
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": f"QUESTION: {question}\n\nCOMPRESSED SECURITY LOGS:\n{compressed_text}"}
+                        {"role": "user", "content": f"QUESTION: {question}\n\nCOMPRESSED SECURITY LOGS:\n{truncated_text}"}
                     ],
-                    "temperature": 0.1
+                    "temperature": 0.1,
+                    "max_tokens": 4096
                 }
                 res = httpx.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30.0)
                 if res.status_code == 200:
