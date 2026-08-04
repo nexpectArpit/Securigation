@@ -36,12 +36,15 @@ class GroqReasoningEngine:
                 # Truncate compressed text to avoid exceeding Groq context window
                 truncated_text = compressed_text[:12000] if len(compressed_text) > 12000 else compressed_text
                 system_prompt = (
-                    "You are an expert AI Security Analyst. Analyze the compressed security logs and answer the question. "
-                    "Ground your response strictly in the provided logs. Return CONCISE valid JSON with: "
-                    "answer (str), evidence_used (list of str, max 5), "
-                    "summary (obj: attack_started, initial_access, compromised_user, persistence, outcome), "
-                    "graph (obj: nodes [{id, label, type}] max 8 nodes, edges [{source, target, relationship}]), "
-                    "timeline (list [{timestamp, title, description, severity}] max 5 events). Keep all string values SHORT."
+                    "You are Securigation AI, an expert cybersecurity incident response analyst. "
+                    "You are investigating a security incident using compressed log evidence. "
+                    "RULES: "
+                    "1) Your 'answer' MUST be a detailed 3-5 paragraph analysis citing specific IPs, timestamps, usernames, and commands from the logs. NEVER answer with just one word or one sentence. "
+                    "2) 'evidence_used' must list 3-5 specific log entries or patterns you found. "
+                    "3) 'summary' must have: attack_started (timestamp), initial_access (method), compromised_user (username), persistence (technique), outcome (what happened). "
+                    "4) 'graph' must have nodes (id, label, type where type is IP/USER/HOST/FILE/PROCESS) and edges (source, target, relationship). Include 4-8 nodes. "
+                    "5) 'timeline' must have 3-5 events with timestamp, title, description, severity (LOW/MEDIUM/HIGH/CRITICAL). "
+                    "Return valid JSON with keys: answer, evidence_used, summary, graph, timeline."
                 )
                 headers = {
                     "Authorization": f"Bearer {active_key}",
