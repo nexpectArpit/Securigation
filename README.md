@@ -2,7 +2,7 @@
 
 [![Built with Paritok](https://img.shields.io/badge/Built%20with-Paritok-1f2d3d)](https://github.com/Paritok-official/paritok-4b-v1)
 
-Built with [Paritok](https://github.com/Paritok-official/paritok-4b-v1) Hackathon Edition
+Built with [Paritok](https://github.com/Paritok-official/paritok-4b-v1) 
 
 **Live Demo Backend Link:** [https://securigation.onrender.com/](https://securigation.onrender.com/)
 
