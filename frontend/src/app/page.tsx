@@ -58,8 +58,9 @@ export default function Home() {
   const [samplesError, setSamplesError] = useState<string>("");
   const [samplesLoading, setSamplesLoading] = useState<boolean>(true);
 
-  // Fetch sample files on mount
-  useEffect(() => {
+  const [retryCountdown, setRetryCountdown] = useState<number>(5);
+
+  const fetchSamples = () => {
     setSamplesLoading(true);
     getSampleInvestigations()
       .then((data) => {
@@ -72,9 +73,32 @@ export default function Home() {
       })
       .catch((err) => {
         console.error("Failed to load sample datasets", err);
-        setSamplesError("Backend not reachable. Start the backend with: cd backend && python run_backend.py");
+        setSamplesError("Render Backend Awakening (Cold Start in Progress)... The free-tier container is booting up. Please wait ~45 seconds.");
+        setRetryCountdown(5);
       })
       .finally(() => setSamplesLoading(false));
+  };
+
+  // Auto-retry polling loop when backend is awakening from cold start
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (samplesError && !samplesLoading) {
+      timer = setInterval(() => {
+        setRetryCountdown((prev) => {
+          if (prev <= 1) {
+            fetchSamples();
+            return 5;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [samplesError, samplesLoading]);
+
+  // Fetch sample files on mount
+  useEffect(() => {
+    fetchSamples();
   }, []);
 
   // Handle Demo Scenario Selection
@@ -351,30 +375,44 @@ export default function Home() {
 
                 {samplesError && !samplesLoading && (
                   <div style={{
-                    background: "rgba(239,68,68,0.08)",
-                    border: "1px solid rgba(239,68,68,0.25)",
-                    borderRadius: "8px",
-                    padding: "14px 18px",
-                    fontSize: "0.82rem",
-                    color: "#f87171",
+                    background: "rgba(245, 158, 11, 0.08)",
+                    border: "1px solid rgba(245, 158, 11, 0.3)",
+                    borderRadius: "10px",
+                    padding: "16px 20px",
+                    fontSize: "0.85rem",
+                    color: "#fbbf24",
                     fontFamily: "monospace",
                     display: "flex",
                     flexDirection: "column",
-                    gap: "8px"
+                    gap: "10px"
                   }}>
-                    <div>⚠ {samplesError}</div>
-                    <button
-                      onClick={() => {
-                        setSamplesLoading(true);
-                        getSampleInvestigations()
-                          .then((data) => { setSamples(data); setSamplesError(""); if (data.length > 0) { setCurrentInvestigation(data[0]); setSelectedSampleId(data[0].id); } })
-                          .catch(() => setSamplesError("Backend not reachable. Start the backend with: cd backend && python run_backend.py"))
-                          .finally(() => setSamplesLoading(false));
-                      }}
-                      style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171", padding: "6px 14px", borderRadius: "6px", cursor: "pointer", fontSize: "0.78rem", fontWeight: 700, width: "fit-content" }}
-                    >
-                      ↻ Retry
-                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", fontWeight: 700, fontSize: "0.9rem" }}>
+                      <span style={{ animation: "spin 1.5s linear infinite", display: "inline-block" }}>⚡</span>
+                      RENDER BACKEND AWAKENING (COLD START)
+                    </div>
+                    <div style={{ color: "rgba(255,255,255,0.8)", lineHeight: 1.5 }}>
+                      Render free-tier containers go to sleep after 15 minutes of inactivity. The backend is currently booting up — this takes about 45 seconds.
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "4px" }}>
+                      <div style={{ fontSize: "0.8rem", color: "#6366f1", fontWeight: 600 }}>
+                        Auto-checking connection in <span style={{ color: "#00f5c8", fontWeight: 800 }}>{retryCountdown}s</span>...
+                      </div>
+                      <button
+                        onClick={fetchSamples}
+                        style={{
+                          background: "linear-gradient(135deg, #00f5c8 0%, #06b6d4 100%)",
+                          border: "none",
+                          color: "#040912",
+                          padding: "6px 16px",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          fontSize: "0.8rem",
+                          fontWeight: 800
+                        }}
+                      >
+                        ↻ Check Connection Now
+                      </button>
+                    </div>
                   </div>
                 )}
 
