@@ -37,16 +37,15 @@ class GroqReasoningEngine:
                 # Truncate compressed text — stay within Groq free tier 12K TPM
                 truncated_text = compressed_text[:3000] if len(compressed_text) > 3000 else compressed_text
                 system_prompt = (
-                    "You are Securigation AI, a cybersecurity incident response analyst. "
-                    "Analyze the compressed security logs and answer the question. "
+                    "You are Securigation AI, an expert cybersecurity incident response analyst. "
+                    "Analyze the compressed security logs and answer the user's question directly and thoroughly. "
                     "CRITICAL RULES: "
-                    "1) 'answer': 2-3 paragraph analysis citing IPs, timestamps, usernames. Never one word. "
-                    "2) 'evidence_used': list of 3-5 short descriptions of evidence patterns found. Do NOT paste raw log lines. "
-                    "3) 'summary': {attack_started, initial_access, compromised_user, persistence, outcome} — each value is a short string. "
-                    "4) 'graph': {nodes: [{id: string, label: string, type: string}], edges: [{source: string, target: string, relationship: string}]} — 4-6 nodes, type must be IP/USER/HOST/FILE/PROCESS. "
-                    "5) 'timeline': [{timestamp, title, description, severity}] — 3-4 events, severity must be LOW/MEDIUM/HIGH/CRITICAL. "
-                    "IMPORTANT: Do NOT copy raw log lines into your response. Summarize findings in your own words. "
-                    "Return valid JSON with keys: answer, evidence_used, summary, graph, timeline."
+                    "1) 'answer': Provide a detailed 2-3 paragraph forensic explanation directly answering the user's question using specific details (IPs, usernames, log sources, timestamps) from the logs. NEVER give generic one-sentence replies like 'Analysis complete.' "
+                    "2) 'evidence_used': list of 3-4 concise evidence bullet points. "
+                    "3) 'summary': {attack_started, initial_access, compromised_user, persistence, outcome} — short strings. "
+                    "4) 'graph': {nodes: [{id: string, label: string, type: string}], edges: [{source: string, target: string, relationship: string}]} — 4-5 nodes (IP/USER/HOST/FILE/PROCESS). "
+                    "5) 'timeline': [{timestamp, title, description, severity}] — 3-4 concise events (LOW/MEDIUM/HIGH/CRITICAL). "
+                    "Do NOT copy raw log lines. Return strictly valid JSON."
                 )
                 headers = {
                     "Authorization": f"Bearer {active_key}",
@@ -54,7 +53,6 @@ class GroqReasoningEngine:
                 }
                 payload = {
                     "model": self.model,
-                    "response_format": {"type": "json_object"},
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": f"QUESTION: {question}\n\nCOMPRESSED SECURITY LOGS:\n{truncated_text}"}
@@ -76,7 +74,26 @@ class GroqReasoningEngine:
                 if res.status_code == 200:
                     res_json = res.json()
                     content = res_json["choices"][0]["message"]["content"]
-                    parsed = json.loads(content)
+                    
+                    # Robust JSON extraction (handles markdown backticks ```json ... ```)
+                    json_str = content
+                    if "```" in content:
+                        match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
+                        if match:
+                            json_str = match.group(1)
+                        else:
+                            json_str = content.replace("```json", "").replace("```", "").strip()
+
+                    try:
+                        parsed = json.loads(json_str)
+                    except Exception:
+                        # Find first '{' and last '}'
+                        start_idx = content.find('{')
+                        end_idx = content.rfind('}')
+                        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                            parsed = json.loads(content[start_idx:end_idx+1])
+                        else:
+                            parsed = {}
                     if isinstance(parsed, list):
                         if len(parsed) > 0 and isinstance(parsed[0], dict):
                             parsed = parsed[0]
@@ -126,7 +143,12 @@ class GroqReasoningEngine:
                     except Exception:
                         timeline_objs = self._extract_fallback_timeline(compressed_events)
                     
-                    return parsed.get("answer", "Analysis complete."), parsed.get("evidence_used", []), summary_obj, graph_obj, timeline_objs
+                    ans = parsed.get("answer", "").strip()
+                    if not ans or len(ans) < 25 or ans.lower() == "analysis complete.":
+                        fallback_ans, _, _, _, _ = self._generate_deterministic_reasoning(question, compressed_events)
+                        ans = fallback_ans
+
+                    return ans, parsed.get("evidence_used", []), summary_obj, graph_obj, timeline_objs
                 else:
                     error_msg = f"Groq API returned status code {res.status_code}: {res.text[:200]}"
                     print(f"[GroqReasoningEngine] {error_msg}")
@@ -146,39 +168,51 @@ class GroqReasoningEngine:
         question: str,
         events: List[UnifiedSecurityEvent]
     ) -> Tuple[str, List[str], InvestigationSummaryData, GraphData, List[TimelineEvent]]:
-        # Extract flagged IPs, Users, and High-Severity Events
+        # Extract flagged IPs, Users, Log Sources, and Timestamps from actual events
         ips = list(set([e.source_ip for e in events if e.source_ip]))
         users = list(set([e.user_account for e in events if e.user_account and e.user_account != "UNKNOWN"]))
         hosts = list(set([e.hostname for e in events if e.hostname]))
+        log_sources = list(set([e.log_source for e in events if e.log_source]))
         
-        main_ip = ips[0] if ips else "192.168.1.105"
-        main_user = users[0] if users else "admin"
-        main_host = hosts[0] if hosts else "DC-01.corp.internal"
+        main_ip = ips[0] if ips else "Unknown IP"
+        main_user = users[0] if users else "root / admin"
+        main_host = hosts[0] if hosts else "server-node"
+        sources_str = ", ".join(log_sources[:5]) if log_sources else "syslog, auth.log"
         
-        auth_failures = sum(1 for e in events if "AUTHENTICATION_FAILURE" in e.event_type or "Failed" in e.summary)
-        auth_successes = sum(1 for e in events if "AUTHENTICATION_SUCCESS" in e.event_type or "Accepted" in e.summary or "4624" in e.summary)
-        
-        answer = (
-            f"The attack originated from IP address **{main_ip}**. "
-            f"The attacker conducted automated brute-force authentication attempts against host **{main_host}**, "
-            f"resulting in unauthorized login access to the user account **'{main_user}'**. "
-            f"Following initial compromise, escalation activity and anomalous system command executions were recorded."
-        )
-        
+        q_lower = question.lower()
+
+        # Custom tailored answers based on question intent
+        if any(w in q_lower for w in ["file", "zip", "source", "what files"]):
+            answer = (
+                f"The uploaded investigation log corpus contains evidence from **{len(log_sources)} distinct log sources**: "
+                f"**{sources_str}**. A total of **{len(events):,} security events** were parsed and indexed into the search engine."
+            )
+        elif any(w in q_lower for w in ["timeline", "time", "when", "clock", "date"]):
+            t_start = events[0].timestamp if events else "2026-07-31T00:00:00Z"
+            t_end = events[-1].timestamp if events else "2026-07-31T01:00:00Z"
+            answer = (
+                f"The event timeline spans from **{t_start}** to **{t_end}**. "
+                f"Key initial events were recorded from IP **{main_ip}**, followed by privilege activity on host **{main_host}**."
+            )
+        else:
+            answer = (
+                f"Based on the indexed log events, activity originated from IP **{main_ip}** against host **{main_host}**. "
+                f"The compromised session involved account **'{main_user}'** across log sources: {sources_str}."
+            )
+
         evidence_used = [
-            f"✓ Identified {max(47, auth_failures)} authentication failure log events originating from {main_ip}",
-            f"✓ Verified successful SSH/RDP login sequence for account '{main_user}' on {main_host}",
-            f"✓ Detected privilege elevation and interactive process shell creation",
-            f"✓ Recorded outbound network connectivity to suspicious endpoint from {main_host}"
+            f"✓ Analyzed {len(events):,} security events across sources: {sources_str}",
+            f"✓ Identified activity from origin IP: {main_ip}",
+            f"✓ Correlated user session: '{main_user}' on host: {main_host}"
         ]
-        
+
         start_time = events[0].timestamp if events else "2026-07-31T00:04:12.000Z"
         summary = InvestigationSummaryData(
             attack_started=start_time,
-            initial_access=f"SSH / RDP Brute Force from {main_ip}",
+            initial_access=f"Activity from {main_ip}",
             compromised_user=main_user,
-            persistence="SSH Authorized Key Insertion & Service Privilege Escalation",
-            outcome=f"System Privilege Access Granted on {main_host}"
+            persistence=f"Events in {log_sources[0] if log_sources else 'auth.log'}",
+            outcome=f"Session Active on {main_host}"
         )
         
         nodes = [

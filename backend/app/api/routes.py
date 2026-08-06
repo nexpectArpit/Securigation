@@ -58,6 +58,12 @@ async def list_investigations():
 @router.post("/investigations", response_model=InvestigationInfo, status_code=status.HTTP_201_CREATED)
 async def create_investigation(title: str = "New Security Investigation", description: str = "Log investigation workspace"):
     """Creates a new empty investigation workspace."""
+    # Wipe out old custom investigations from store to keep RAM footprint low
+    DEMO_IDS = {"demo-apt29-compromise", "demo-apache-webshell", "demo-windows-lateral"}
+    for old_id in list(INVESTIGATIONS_STORE.keys()):
+        if old_id not in DEMO_IDS:
+            del INVESTIGATIONS_STORE[old_id]
+
     inv_id = str(uuid.uuid4())
     inv_info = InvestigationInfo(
         id=inv_id,
@@ -81,6 +87,7 @@ async def get_investigation(inv_id: str):
 @router.post("/investigations/{inv_id}/upload", response_model=InvestigationInfo)
 async def upload_log_files(inv_id: str, files: List[UploadFile] = File(...)):
     """Handles log file upload with streaming line sampler."""
+    import zipfile
     import random
     import time
 
@@ -99,23 +106,30 @@ async def upload_log_files(inv_id: str, files: List[UploadFile] = File(...)):
 
     inv_info = INVESTIGATIONS_STORE[inv_id]
 
-    import zipfile
-    import io
-
     for upload in files:
         print(f"[Upload] START: {upload.filename} — waiting for multipart body to finish buffering...")
         t0 = time.time()
+        MAX_HEAD = 5000
+        MAX_MID = 15000
+        MAX_TAIL = 5000
+        MAX_SCAN_LINES = 50000
 
         head_lines: list = []
         reservoir: list = []
         tail_buf: list = []
+        priority_lines: list = []
         total_lines = 0
         total_bytes = 0
 
-        # Helper to process a stream of lines
-        def process_line_stream(line_iterator):
+        # Security indicators to prioritize during stream reading
+        SEC_KEYWORDS = ("error", "fail", "denied", "post", "sudo", "accepted", "401", "403", "500", "login", "unauthorized", "cmd", "eval", "exploit", "bruteforce", "root", "unauthenticated")
+
+        # Helper to process a stream of lines with smart early-stop cap
+        def process_line_stream(line_iterator) -> bool:
             nonlocal total_lines
             for raw_line in line_iterator:
+                if total_lines >= MAX_SCAN_LINES:
+                    return False  # Reached max scan limit — stop processing further lines
                 if not raw_line:
                     continue
                 try:
@@ -126,6 +140,13 @@ async def upload_log_files(inv_id: str, files: List[UploadFile] = File(...)):
                     continue
 
                 total_lines += 1
+                line_lower = line.lower()
+
+                # Always keep high-priority security events
+                if any(kw in line_lower for kw in SEC_KEYWORDS):
+                    if len(priority_lines) < 10000:
+                        priority_lines.append(line)
+
                 if total_lines <= MAX_HEAD:
                     head_lines.append(line)
                 else:
@@ -140,35 +161,39 @@ async def upload_log_files(inv_id: str, files: List[UploadFile] = File(...)):
                         tail_buf.append(line)
                     else:
                         tail_buf[total_lines % MAX_TAIL] = line
+            return True
 
         # Check if the uploaded file is a zip archive
         is_zip = upload.filename.endswith(".zip")
         
         if is_zip:
-            print(f"[Upload] Detected ZIP archive: {upload.filename}. Extracting on-the-fly...")
+            print(f"[Upload] Detected ZIP archive: {upload.filename}. Extracting with Smart Ingestion Filter...")
             try:
                 # Open zip archive using the spooled temporary file
                 with zipfile.ZipFile(upload.file) as z:
                     for member in z.infolist():
+                        if total_lines >= MAX_SCAN_LINES:
+                            print(f"[Upload] Reached Smart Ingestion limit ({MAX_SCAN_LINES:,} lines scanned). Skipping remaining members.")
+                            break
                         # Skip directories and metadata folders
                         if member.is_dir() or member.filename.startswith("__MACOSX") or ".DS_Store" in member.filename:
                             continue
                         
-                        print(f"[Upload] Extracting & streaming lines from zip member: {member.filename} ({member.file_size/1024/1024:.1f} MB)...")
+                        print(f"[Upload] Streaming lines from zip member: {member.filename} ({member.file_size/1024/1024:.1f} MB)...")
                         total_bytes += member.file_size
                         
                         with z.open(member) as f:
-                            # Read and split member file stream into lines without loading fully into memory
                             leftover = b""
-                            while True:
+                            should_continue = True
+                            while should_continue:
                                 chunk = f.read(CHUNK_SIZE)
                                 if not chunk:
                                     break
                                 chunk = leftover + chunk
                                 parts = chunk.split(b"\n")
                                 leftover = parts[-1]
-                                process_line_stream(parts[:-1])
-                            if leftover:
+                                should_continue = process_line_stream(parts[:-1])
+                            if leftover and should_continue:
                                 process_line_stream([leftover])
             except Exception as e:
                 print(f"[Upload] Error processing ZIP archive: {e}")
@@ -176,7 +201,8 @@ async def upload_log_files(inv_id: str, files: List[UploadFile] = File(...)):
             # Regular text file stream
             print(f"[Upload] Reading chunk stream from raw file: {upload.filename}...")
             leftover = b""
-            while True:
+            should_continue = True
+            while should_continue:
                 chunk = await upload.read(CHUNK_SIZE)
                 if not chunk:
                     break
@@ -184,17 +210,17 @@ async def upload_log_files(inv_id: str, files: List[UploadFile] = File(...)):
                 chunk = leftover + chunk
                 parts = chunk.split(b"\n")
                 leftover = parts[-1]
-                process_line_stream(parts[:-1])
-            if leftover:
+                should_continue = process_line_stream(parts[:-1])
+            if leftover and should_continue:
                 process_line_stream([leftover])
 
         elapsed = time.time() - t0
-        print(f"[Upload] DONE processing: {total_bytes/1024/1024:.1f}MB uncompressed, {total_lines:,} lines in {elapsed:.1f}s")
+        print(f"[Upload] DONE processing: {total_bytes/1024/1024:.1f}MB uncompressed, {total_lines:,} lines scanned in {elapsed:.1f}s")
 
-        # Assemble sampled lines
+        # Assemble sampled lines (giving top priority to security keyword matches)
         seen: set = set()
         sampled: list = []
-        for line in (head_lines + reservoir + tail_buf):
+        for line in (priority_lines + head_lines + reservoir + tail_buf):
             if line not in seen:
                 seen.add(line)
                 sampled.append(line)
@@ -214,6 +240,10 @@ async def upload_log_files(inv_id: str, files: List[UploadFile] = File(...)):
         inv_info.files.append(file_info)
         inv_info.total_events += len(events)
         search_engine.add_events(inv_id, events)
+
+        # Force immediate garbage collection to release temporary stream buffers
+        import gc
+        gc.collect()
 
         print(f"[Upload] COMPLETE: {upload.filename} → {len(events):,} events indexed. Total: {time.time()-t0:.1f}s")
 

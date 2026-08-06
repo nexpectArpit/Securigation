@@ -55,6 +55,7 @@ async def startup_event():
     asyncio.create_task(keep_alive())
 
 @app.get("/")
+@app.head("/")
 async def root():
     return {
         "status": "online",

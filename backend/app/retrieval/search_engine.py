@@ -8,6 +8,16 @@ class InMemorySearchEngine:
         self._index: Dict[str, List[UnifiedSecurityEvent]] = {}
 
     def add_events(self, investigation_id: str, events: List[UnifiedSecurityEvent]):
+        DEMO_IDS = {"demo-apt29-compromise", "demo-apache-webshell", "demo-windows-lateral"}
+        
+        # When a new custom upload arrives, wipe out all old custom uploads from memory
+        if investigation_id not in DEMO_IDS and investigation_id not in self._index:
+            custom_ids = [k for k in list(self._index.keys()) if k not in DEMO_IDS]
+            for old_id in custom_ids:
+                del self._index[old_id]
+            import gc
+            gc.collect()
+
         if investigation_id not in self._index:
             self._index[investigation_id] = []
         self._index[investigation_id].extend(events)

@@ -150,8 +150,8 @@ export default function Home() {
     const totalBytes = uploadedFiles.reduce((s, f) => s + f.size, 0);
     const totalMB = (totalBytes / 1024 / 1024).toFixed(1);
 
-    // Estimate upload time at ~1.2 MB/s + 8s backend processing buffer
-    let remainingSeconds = Math.max(8, Math.round(totalBytes / (1.2 * 1024 * 1024)) + 8);
+    // Estimate upload time: fast streaming + 3s smart ingestion buffer
+    let remainingSeconds = Math.min(15, Math.max(3, Math.round(totalBytes / (1.8 * 1024 * 1024)) + 3));
 
     setUploadStatus(`Uploading & processing ${totalMB}MB... ~${remainingSeconds}s remaining`);
 
